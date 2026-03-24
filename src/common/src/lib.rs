@@ -1,3 +1,4 @@
+pub mod bldc;
 pub mod secret;
 pub mod servo;
 pub mod types;

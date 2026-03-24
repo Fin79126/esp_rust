@@ -20,7 +20,6 @@ pub fn tcp_task() -> Result<()> {
         };
         let mut buf = Vec::with_capacity(256);
         let mut len_buf = [0u8; 4];
-        let mut send_buf = [0u8; 4];
         log::info!("Waiting for TCP commands...");
         loop {
             buf.clear();
@@ -56,11 +55,11 @@ pub fn tcp_task() -> Result<()> {
                     let status = ESPStatus {
                         heartbeat: HEARTBEAT.load(Ordering::Relaxed),
                     };
-                    let bytes = postcard::to_slice(&status, &mut send_buf)?;
+                    let bytes = postcard::to_allocvec(&status)?;
                     let len = (bytes.len() as u32).to_be_bytes();
 
                     stream.write_all(&len)?;
-                    stream.write_all(bytes)?;
+                    stream.write_all(&bytes)?;
                     stream.flush()?;
                 }
                 MainCommand::AttachServo => {

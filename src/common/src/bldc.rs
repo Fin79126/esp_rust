@@ -1,12 +1,12 @@
 use esp_idf_svc::hal::{gpio::OutputPin, ledc::LedcChannel, ledc::*};
 
 /// サーボ制御構造体
-pub struct Servo<'d> {
+pub struct BLDC<'d> {
     channel: Option<LedcDriver<'d>>,
     is_attached: bool,
 }
 
-impl<'d> Servo<'d> {
+impl<'d> BLDC<'d> {
     /// new（未初期化状態）
     pub fn new() -> Self {
         Self {
@@ -51,34 +51,18 @@ impl<'d> Servo<'d> {
         self.is_attached = true;
     }
 
-    /// 角度設定 (0〜180)
-    pub fn set(&mut self, angle: u16) -> anyhow::Result<()> {
-        let ch = match self.channel.as_mut() {
-            Some(c) => c,
-            None => {
-                // setupしてない → 無視
-                return Ok(());
-            }
-        };
+    pub fn set(&mut self, power: i16) -> anyhow::Result<()> {
         if !self.is_attached {
-            // detachされてる → 無視
-            return Ok(());
+            return Ok(()); // detach状態なら何もしない
         }
-
-        // 角度制限
-        let angle = angle.clamp(0, 180);
-
-        // サーボPWM: 0.5ms〜2.5ms (周期20ms)
-        let min_duty = 0.025; // 0.5ms / 20ms
-        let max_duty = 0.125; // 2.5ms / 20ms
-
-        let duty = min_duty + (angle as f32 / 180.0) * (max_duty - min_duty);
-
-        let max_duty_val = ch.get_max_duty();
-        let duty_val = (duty * max_duty_val as f32) as u32;
-
-        ch.set_duty(duty_val)?;
-
+        if let Some(c) = self.channel.as_mut() {
+            // power: -100〜100 → duty: 0.025〜0.125
+            let power = power.clamp(-100, 100);
+            let duty = 0.075 + (power as f32 / 200.0) * 0.1; // -100で0.025、0で0.075、100で0.125
+            let max_duty_val = c.get_max_duty();
+            let duty_val = (duty * max_duty_val as f32) as u32;
+            c.set_duty(duty_val)?;
+        }
         Ok(())
     }
 }

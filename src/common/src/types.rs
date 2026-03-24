@@ -18,3 +18,8 @@ pub enum MainCommand {
 pub struct ESPStatus {
     pub heartbeat: u32,
 }
+#[derive(Serialize, Deserialize, Debug)]
+pub struct LegsCommand {
+    pub servo: [u16; 12], // 0-180など
+    pub bldc: [i16; 2],
+}

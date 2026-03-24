@@ -1,44 +1,77 @@
+// mod monitor;
+// mod old;
+mod tcp;
+mod udp;
+mod unit;
+
+use core::sync::atomic::AtomicU32;
+use esp_idf_svc::hal::delay::FreeRtos;
+use std::thread;
+
 use anyhow::Result;
-use common::servo::Servo;
-use esp_idf_svc::hal::{
-    ledc::config, ledc::LedcTimerDriver, peripherals::Peripherals, units::FromValueType,
-};
-use esp_idf_svc::{log::EspLogger, sys::link_patches};
-use serde::{Deserialize, Serialize};
+// use monitor::monitor_task;
+use common::secret::{wifi_password, wifi_ssid};
+use core::sync::atomic::AtomicBool;
+use dotenv::dotenv;
+use tcp::tcp_task;
+use udp::udp_task;
+use unit::LegsUnit;
+
+use esp_idf_svc::hal::peripherals::Peripherals;
+use esp_idf_svc::{eventloop::EspSystemEventLoop, log::EspLogger, sys::link_patches, wifi::*};
+use heapless::String;
 use std::{thread::sleep, time::Duration};
 
-#[derive(Serialize, Deserialize, Debug)]
-pub struct MotorCommand {
-    pub motor_left: f32,
-    pub motor_right: f32,
-    pub servo: f32,
-}
+pub static ATTACH_SERVO: AtomicBool = AtomicBool::new(false);
+pub static DETACH_SERVO: AtomicBool = AtomicBool::new(false);
+pub static HEARTBEAT: AtomicU32 = AtomicU32::new(0);
+
 fn main() -> Result<()> {
     // ESP-IDF 初期化
     link_patches();
-
     EspLogger::initialize_default();
 
+    dotenv().ok();
+
     let peripherals = Peripherals::take().unwrap();
+    let sysloop = EspSystemEventLoop::take()?;
+
+    let mut legs_unit = LegsUnit::new();
+    legs_unit.setup_units(peripherals.ledc, peripherals.hledc, peripherals.pins)?;
 
     // =========================
-    // PWM（サーボ用）
+    // WiFi設定
     // =========================
-    let ledc = peripherals.ledc;
-    let timer = LedcTimerDriver::new(
-        ledc.timer0,
-        &config::TimerConfig::default().frequency(50.Hz().into()),
-    )?;
+    let mut wifi = EspWifi::new(peripherals.modem, sysloop.clone(), None)?;
 
-    let mut servo = Servo::new();
-    servo.setup(ledc.channel0, &timer, peripherals.pins.gpio18)?;
+    let ssid: String<32> = wifi_ssid();
+    let password: String<64> = wifi_password();
+    let wifi_config = Configuration::Client(ClientConfiguration {
+        ssid: ssid,
+        password: password,
+        ..Default::default()
+    });
 
-    loop {
-        servo.set(90.0)?;
-        log::info!("Set servo to 90 degrees");
-        sleep(Duration::from_secs(2));
-        servo.set(0.0)?;
-        log::info!("Set servo to 0 degrees");
-        sleep(Duration::from_secs(2));
+    wifi.set_configuration(&wifi_config)?;
+    wifi.start()?;
+    wifi.connect()?;
+
+    log::info!("Connecting to WiFi...");
+    while !wifi.is_connected()? {
+        sleep(Duration::from_millis(2000));
+        log::info!("Waiting for WiFi connection...");
     }
+    log::info!("WiFi connected!");
+
+    thread::spawn(move || tcp_task());
+
+    while let Err(e) = udp_task(&mut legs_unit) {
+        log::error!("UDP task error: {:?}", e);
+        // エラーが発生したら少し待ってから再起動
+        FreeRtos::delay_ms(1000);
+    }
+
+    // monitor_task(heartbeat);
+
+    Ok(())
 }

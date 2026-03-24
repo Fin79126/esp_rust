@@ -23,21 +23,21 @@ impl BattServo {
         let timer_config = config::TimerConfig::default().frequency(50.Hz().into());
         let timer_driver = LedcTimerDriver::new(ledc.timer0, &timer_config)?;
         self.servo1
-            .setup(ledc.channel0, &timer_driver, pins.gpio18)?;
+            .setup(ledc.channel0, &timer_driver, pins.gpio14)?;
         self.servo2
-            .setup(ledc.channel1, &timer_driver, pins.gpio19)?;
+            .setup(ledc.channel1, &timer_driver, pins.gpio15)?;
         self.servo3
-            .setup(ledc.channel2, &timer_driver, pins.gpio20)?;
+            .setup(ledc.channel2, &timer_driver, pins.gpio16)?;
         self.servo4
-            .setup(ledc.channel3, &timer_driver, pins.gpio21)?;
+            .setup(ledc.channel3, &timer_driver, pins.gpio17)?;
         Ok(())
     }
 
     pub fn set_servos_angle(&mut self, command: &BattCommand) -> anyhow::Result<()> {
-        self.servo1.set(command.servo[0] as f32)?;
-        self.servo2.set(command.servo[1] as f32)?;
-        self.servo3.set(command.servo[2] as f32)?;
-        self.servo4.set(command.servo[3] as f32)?;
+        self.servo1.set(command.servo[0])?;
+        self.servo2.set(command.servo[1])?;
+        self.servo3.set(command.servo[2])?;
+        self.servo4.set(command.servo[3])?;
         Ok(())
     }
 
