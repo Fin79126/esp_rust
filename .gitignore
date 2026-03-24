@@ -1,0 +1,8 @@
+/.vscode
+/.embuild
+/target
+/Cargo.lock
+/.devcontainer
+
+# Secret files
+secret.rs
